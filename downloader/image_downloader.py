@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 from datetime import datetime,timezone
 import urllib.request as req
@@ -10,10 +11,11 @@ from threading import Event, Thread
 import configparser as cfg
 import logging
 
-organize_interval = 86400 ####organize files once per day
+flush_interval = 86400 ####copy files from cache every day
 
 socket.setdefaulttimeout(2);
 
+####util function to call a routine at a specified interval
 def call_repeatedly(intv, func, *args):
     stopped = Event()
     def loop():
@@ -22,7 +24,8 @@ def call_repeatedly(intv, func, *args):
     Thread(target=loop).start()    
     return stopped.set
 
-def organize_files(cams):
+######copy files from cache to output directory
+def flush_files(cams):
     for camera in cams:
         fns=glob.glob(cachepath+camera+'/*jpg')
         print(camera,len(fns))
@@ -34,6 +37,8 @@ def organize_files(cams):
                 os.chmod(dest,0o755)
             os.rename(fn,dest+'/'+camera+'_'+fn[-18:])
 
+####download images from cameras to "cache" and also make a copy to "latest" directory
+####the "latest" directory enables the web dashboard to show real time images
 def makeRequest(cam):
     starttime = datetime.utcnow()
     timestamp=starttime.strftime("%Y%m%d%H%M%S")
@@ -55,9 +60,10 @@ def makeRequest(cam):
         return
 
 if __name__ == "__main__":  
-    ######load configuration file
+    ######load the configuration file
+    config_file = sys.argv[1] if len(sys.argv)>=2 else 'image_downloader.conf'
     config=cfg.ConfigParser()
-    config.read('config.conf')
+    config.read(config_file)
     url_suffix=config['network']['url_suffix']
     interval_day=float(config['interval']['interval_day'])
     interval_night=float(config['interval']['interval_night'])
@@ -67,6 +73,11 @@ if __name__ == "__main__":
     lat=float(config['geolocation']['lat'])
     lon=float(config['geolocation']['lon'])
     ips={}
+    ####create the directories if they do not already exist
+    for dest in [cachepath,latest,imagepath]:
+        if not os.path.isdir(dest):
+            os.mkdirs(dest)
+            os.chmod(dest,0o755)
     for cameraID,ip in config['camera'].items():
         cameraID=cameraID.upper()
         ips[cameraID]=ip
@@ -81,11 +92,10 @@ if __name__ == "__main__":
     
     #####initialize the logger
     logging.basicConfig(format='%(asctime)s [%(funcName)s] [%(process)d %(thread)d] %(levelname)s: %(message)s',\
-                        level=logging.INFO,filename='downloader.log',filemode='w')
+                        level=logging.INFO,filename='image_downloader.log',filemode='w')
     logger=logging.getLogger(__name__)
 
-
-    organize_event = call_repeatedly(organize_interval, organize_files, ips)
+    flush_event = call_repeatedly(flush_interval, flush_files, ips)
 
     p = multiprocessing.Pool(len(ips))
     while (True):
