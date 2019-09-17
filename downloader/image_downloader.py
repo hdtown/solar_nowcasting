@@ -1,4 +1,3 @@
-import os
 import sys
 import glob
 from datetime import datetime,timezone
@@ -10,6 +9,11 @@ import multiprocessing
 from threading import Event, Thread
 import configparser as cfg
 import logging
+from os import system,path,chmod,rename
+try:
+    from os import mkdirs  ###for python3.5
+except:
+    from os import makedirs as mkdirs ####for python3.6 and above
 
 flush_interval = 86400 ####copy files from cache every day
 
@@ -32,10 +36,10 @@ def flush_files(cams):
         for fn in fns:
             doy=fn[-18:-10]
             dest=outpath+camera+'/'+doy
-            if not os.path.isdir(dest):
-                os.makedirs(dest)
-                os.chmod(dest,0o755)
-            os.rename(fn,dest+'/'+camera+'_'+fn[-18:])
+            if not path.isdir(dest):
+                mkdirs(dest)
+                chmod(dest,0o755)
+            rename(fn,dest+'/'+camera+'_'+fn[-18:])
 
 ####download images from cameras to "cache" and also make a copy to "latest" directory
 ####the "latest" directory enables the web dashboard to show real time images
@@ -48,14 +52,14 @@ def makeRequest(cam):
     try:
         fn=cachepath+cam+"/"+cam+"_"+timestamp+".jpg"
         req.urlretrieve("http://"+ips[cam]+url_suffix, fn)
-        os.chmod(fn,0o755); ####set the permission
+        chmod(fn,0o755); ####set the permission
     except Exception as e: 
         logger.error('Cannot retrieval image from: '+cam)
         return
     try:
         fn_latest=latest+cam+'_latest.jpg'
-        os.system('cp '+fn+' '+fn_latest);
-        os.chmod(fn_latest,0o755); ####set the permission
+        system('cp '+fn+' '+fn_latest);
+        chmod(fn_latest,0o755); ####set the permission
     except Exception as e: 
         return
 
@@ -75,20 +79,20 @@ if __name__ == "__main__":
     ips={}
     ####create the directories if they do not already exist
     for dest in [cachepath,latest,imagepath]:
-        if not os.path.isdir(dest):
-            os.mkdirs(dest)
-            os.chmod(dest,0o755)
+        if not path.isdir(dest):
+            mkdirs(dest)
+            chmod(dest,0o755)
     for cameraID,ip in config['camera'].items():
         cameraID=cameraID.upper()
         ips[cameraID]=ip
         dest=cachepath+cameraID
-        if not os.path.isdir(dest):
-            os.makedirs(dest)
-            os.chmod(dest,0o755)
+        if not path.isdir(dest):
+            mkdirs(dest)
+            chmod(dest,0o755)
         dest=imagepath+cameraID
-        if not os.path.isdir(dest):
-            os.makedirs(dest)
-            os.chmod(dest,0o755)
+        if not path.isdir(dest):
+            mkdirs(dest)
+            chmod(dest,0o755)
     
     #####initialize the logger
     logging.basicConfig(format='%(asctime)s [%(funcName)s] [%(process)d %(thread)d] %(levelname)s: %(message)s',\
