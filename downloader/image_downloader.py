@@ -35,7 +35,7 @@ def flush_files(cams):
         print(camera,len(fns))
         for fn in fns:
             doy=fn[-18:-10]
-            dest=outpath+camera+'/'+doy
+            dest=imagepath+camera+'/'+doy
             if not path.isdir(dest):
                 mkdirs(dest)
                 chmod(dest,0o755)
