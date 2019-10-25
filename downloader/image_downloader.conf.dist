@@ -5,25 +5,16 @@ url_suffix = /cgi-bin/viewer/video.jpg?quality=5&streamid=0
 interval_day = 30
 interval_night = 300
 
-# HD1C and HD3A being retired
 [camera]
-HD1A = 192.168.198.119
-HD1B = 192.168.198.117
-# HD1C = 192.168.198.120
-HD2A = 10.34.6.27
-HD2B = 130.199.52.29
-HD2C = 130.199.52.2
-# HD3A = 47.21.73.78:2048
-HD3B = 108.170.103.154:2048   
-HD4A = 142.54.64.130:2048
-HD4B = 96.57.70.246:2048
-HD5A = 108.58.78.134:2048
-HD5B = 173.220.33.74:2048
+# list camera urls, with CAMcode = url
+# HD1A = http://192.168.1.1:2048
 
 [path]
-cachepath = /home/data/cache/
-latest = /home/data/latest/
-imagepath = /home/data/images/
+# SITE is the code for the locale, e.g. "bnl" or "alb"
+cachepath = /SITE/data/cache/
+latest = /SITE/data/latest/
+imagepath = /SITE/data/images/
+logpath = /SITE/log/
 
 # geolocation is only used to calculate sun angle and
 # determine the image collection frequency, i.e., to 
