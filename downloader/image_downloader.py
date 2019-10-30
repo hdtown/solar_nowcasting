@@ -2,6 +2,7 @@ import sys
 import glob
 from datetime import datetime,timezone
 import urllib.request as req
+import ssl
 import time
 import pysolar.solar as ps
 import socket
@@ -46,12 +47,24 @@ def flush_files(cams):
 def makeRequest(cam):
     starttime = datetime.utcnow()
     timestamp=starttime.strftime("%Y%m%d%H%M%S")
+# for improper ssl certificates, try this to ignore CERTs
+    context=ssl.create_default_context()
+    context.check_hostname=False
+    context.verify_mode=ssl.CERT_NONE
+
     proxy = req.ProxyHandler({})
-    opener = req.build_opener(proxy)
+    opener = req.build_opener(proxy,req.HTTPSHandler(context=context))
     req.install_opener(opener)
     try:
-        fn=cachepath+cam+"/"+cam+"_"+timestamp+".jpg"
-        req.urlretrieve(urls[cam]+url_suffix, fn)
+        fn=path.join(cachepath,cam,cam+"_"+timestamp+".jpg")
+# neither this:
+        req.urlretrieve(urls[cam]+url_suffix,fn)
+# nor this:
+#        with req.urlopen(urls[cam]+url_suffix) as f:
+#            with open(fn,'w') as ofn:
+#                ofn.write(f.read())
+# works right now, no errors reported for some reason, but when I do it interactively,
+# I get: urlopen error [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE]
         chmod(fn,0o755); ####set the permission
     except Exception as e: 
         logger.error('Cannot retrieve image from: '+cam)
