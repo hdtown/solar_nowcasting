@@ -1,0 +1,24 @@
+[network]
+url_suffix = /cgi-bin/viewer/video.jpg?quality=5&streamid=0
+
+[interval]
+interval_day = 30
+interval_night = 300
+
+[camera]
+# list camera urls, with CAMcode = url
+# HD1A = http://192.168.1.1:2048
+
+[path]
+# SITE is the code for the locale, e.g. "bnl" or "alb"
+cachepath = /SITE/data/cache/
+latest = /SITE/data/latest/
+imagepath = /SITE/data/images/
+logpath = /SITE/log/
+
+# geolocation is only used to calculate sun angle and
+# determine the image collection frequency, i.e., to 
+# collect images at interval_day or interval_night.
+[geolocation]
+lat = 40.87
+lon = -72.87

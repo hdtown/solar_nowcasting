@@ -2,6 +2,7 @@ import sys
 import glob
 from datetime import datetime,timezone
 import urllib.request as req
+import ssl
 import time
 import pysolar.solar as ps
 import socket
@@ -46,15 +47,27 @@ def flush_files(cams):
 def makeRequest(cam):
     starttime = datetime.utcnow()
     timestamp=starttime.strftime("%Y%m%d%H%M%S")
+# for improper ssl certificates, try this to ignore CERTs
+    context=ssl.create_default_context()
+    context.check_hostname=False
+    context.verify_mode=ssl.CERT_NONE
+
     proxy = req.ProxyHandler({})
-    opener = req.build_opener(proxy)
+    opener = req.build_opener(proxy,req.HTTPSHandler(context=context))
     req.install_opener(opener)
     try:
-        fn=cachepath+cam+"/"+cam+"_"+timestamp+".jpg"
-        req.urlretrieve("http://"+ips[cam]+url_suffix, fn)
+        fn=path.join(cachepath,cam,cam+"_"+timestamp+".jpg")
+# neither this:
+        req.urlretrieve(urls[cam]+url_suffix,fn)
+# nor this:
+#        with req.urlopen(urls[cam]+url_suffix) as f:
+#            with open(fn,'w') as ofn:
+#                ofn.write(f.read())
+# works right now, no errors reported for some reason, but when I do it interactively,
+# I get: urlopen error [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE]
         chmod(fn,0o755); ####set the permission
     except Exception as e: 
-        logger.error('Cannot retrieval image from: '+cam)
+        logger.error('Cannot retrieve image from: '+cam)
         return
     try:
         fn_latest=latest+cam+'_latest.jpg'
@@ -74,17 +87,18 @@ if __name__ == "__main__":
     cachepath=config['path']['cachepath']
     latest=config['path']['latest']
     imagepath=config['path']['imagepath']
+    logpath=config['path']['logpath']
     lat=float(config['geolocation']['lat'])
     lon=float(config['geolocation']['lon'])
-    ips={}
+    urls={}
     ####create the directories if they do not already exist
     for dest in [cachepath,latest,imagepath]:
         if not path.isdir(dest):
             mkdirs(dest)
             chmod(dest,0o755)
-    for cameraID,ip in config['camera'].items():
+    for cameraID,url in config['camera'].items():
         cameraID=cameraID.upper()
-        ips[cameraID]=ip
+        urls[cameraID]=url
         dest=cachepath+cameraID
         if not path.isdir(dest):
             mkdirs(dest)
@@ -96,16 +110,16 @@ if __name__ == "__main__":
     
     #####initialize the logger
     logging.basicConfig(format='%(asctime)s [%(funcName)s] [%(process)d %(thread)d] %(levelname)s: %(message)s',\
-                        level=logging.INFO,filename='image_downloader.log',filemode='w')
+                        level=logging.INFO,filename=path.join(logpath,'image_downloader.log'),filemode='w')
     logger=logging.getLogger(__name__)
 
-    flush_event = call_repeatedly(flush_interval, flush_files, ips)
+    flush_event = call_repeatedly(flush_interval, flush_files, urls)
 
-    p = multiprocessing.Pool(len(ips))
+    p = multiprocessing.Pool(len(urls))
     while (True):
         day_flag = ps.get_altitude(lat,lon,datetime.now(timezone.utc))>5
         intv=interval_day if day_flag else interval_night
-        saveimage_event = call_repeatedly(intv, p.map_async, makeRequest, ips)
+        saveimage_event = call_repeatedly(intv, p.map_async, makeRequest, urls)
         
         if day_flag:
             while ps.get_altitude(lat,lon,datetime.now(timezone.utc))>5:  
