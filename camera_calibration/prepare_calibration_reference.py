@@ -9,6 +9,7 @@ import ephem
 import configparser as cfg
 
 
+#####Need to provide an initial estimate of the calibration parameters that 
 #####params: nx0,cy,cx,rotation,beta,azm
 params = {'HD2C':[2821.0000,1442.8231,1421.0000,0.1700,-0.0135,-2.4368,0.3465,-0.0026,-0.0038],\
           'HD2A':[2821.0000,1424,1449.0000,0.0310,-0.0114,-0.9816,0.3462,-0.0038,-0.0030 ],\
@@ -28,7 +29,7 @@ params = {'HD2C':[2821.0000,1442.8231,1421.0000,0.1700,-0.0135,-2.4368,0.3465,-0
 
 if __name__ == "__main__":  
     ######load the configuration file
-    config_file = sys.argv[1] if len(sys.argv) >= 2 else 'imager_calibration.conf'
+    config_file = sys.argv[1] if len(sys.argv) >= 2 else 'camera_calibration.conf'
     config = cfg.ConfigParser()
     config.read(config_file)
     
@@ -38,74 +39,74 @@ if __name__ == "__main__":
     lat = float(config['geolocation']['lat'])
     lon = float(config['geolocation']['lon'])
     
-nx0=ny0=params[cameraID][0]
-nr0=(nx0+ny0)/4
-xstart=int(params[cameraID][2]-nx0/2+0.5); ystart=int(params[cameraID][1]-ny0/2+0.5)
-nx0=int(nx0+0.5); ny0=int(ny0+0.5)
-roi=np.s_[ystart:ystart+ny0,xstart:xstart+nx0]
-
-gatech = ephem.Observer(); 
-gatech.lat, gatech.lon = '40.88', '-72.87'
-moon=ephem.Moon() 
-
-#ref=np.load(outpath+cameraID+'.npy').item();
-ref={}
-
-flist=sorted(glob.glob(imagepath + '/' + cameraID + '*jpg'));  
-print(imagepath,flist)
-for cnt,f in enumerate(flist):     
-#     print(f)
-    doy=f[-18:-4]
+    nx0=ny0=params[cameraID][0]
+    nr0=(nx0+ny0)/4
+    xstart=int(params[cameraID][2]-nx0/2+0.5); ystart=int(params[cameraID][1]-ny0/2+0.5)
+    nx0=int(nx0+0.5); ny0=int(ny0+0.5)
+    roi=np.s_[ystart:ystart+ny0,xstart:xstart+nx0]
     
-    gatech.date = datetime.strptime(doy,'%Y%m%d%H%M%S').strftime('%Y/%m/%d %H:%M:%S')
-    moon.compute(gatech) 
-    sz=np.pi/2-moon.alt; saz=(params[cameraID][3]+moon.az-np.pi)%(2*np.pi);     
-     
-    rref=np.sin(sz/2)*np.sqrt(2)*nr0
-    xref,yref=nx0//2+rref*np.sin(saz),ny0//2+rref*np.cos(saz)
-    xref=int(xref); yref=int(yref)
+    gatech = ephem.Observer(); 
+    gatech.lat, gatech.lon = '40.88', '-72.87'
+    moon=ephem.Moon() 
     
-    img=plt.imread(f).astype(np.float32);
-    img=img[roi]
-#     plt.figure(); plt.imshow(img/255);
-    img=(0.8*img[:,:,2]+0.2*img[:,:,0])
-#     img=np.nanmean(img,axis=2); #plt.figure(); plt.imshow(img)
+    #ref=np.load(outpath+cameraID+'.npy').item();
+    ref={}
     
-    x1,x2=max(0,xref-150),min(nx0,xref+150)
-    y1,y2=max(0,yref-150),min(ny0,yref+150)
-    img=img[y1:y2,x1:x2]
+    flist=sorted(glob.glob(imagepath + '/' + cameraID + '*jpg'));  
+    print(imagepath,flist)
+    for cnt,f in enumerate(flist):     
+    #     print(f)
+        doy=f[-18:-4]
+        
+        gatech.date = datetime.strptime(doy,'%Y%m%d%H%M%S').strftime('%Y/%m/%d %H:%M:%S')
+        moon.compute(gatech) 
+        sz=np.pi/2-moon.alt; saz=(params[cameraID][3]+moon.az-np.pi)%(2*np.pi);     
+         
+        rref=np.sin(sz/2)*np.sqrt(2)*nr0
+        xref,yref=nx0//2+rref*np.sin(saz),ny0//2+rref*np.cos(saz)
+        xref=int(xref); yref=int(yref)
+        
+        img=plt.imread(f).astype(np.float32);
+        img=img[roi]
+    #     plt.figure(); plt.imshow(img/255);
+        img=(0.8*img[:,:,2]+0.2*img[:,:,0])
+    #     img=np.nanmean(img,axis=2); #plt.figure(); plt.imshow(img)
+        
+        x1,x2=max(0,xref-150),min(nx0,xref+150)
+        y1,y2=max(0,yref-150),min(ny0,yref+150)
+        img=img[y1:y2,x1:x2]
+        
+    #     img_m=st.rolling_mean2(img,11)
+    #     thresh=img_m>200
+        
+        img_m=st.rolling_mean2(img,71,ignore=0)
+        img_m=img-img_m; img_m-=np.nanmean(img_m)
+        std=np.nanstd(img_m)
+        thresh=img_m>4*std
+        
+    #     t=time.time()
+        s = ndimage.generate_binary_structure(2,2) # iterate structure
+        labeled_mask, cc_num = ndimage.label(thresh,s)
+        try:
+            thresh = (labeled_mask == (np.bincount(labeled_mask.flat)[1:].argmax() + 1))
+        except:
+            continue
+        if  np.sum(thresh)<=9:
+            print('Moon not found.')
+            continue
+        
+        # Find coordinates of thresholded image
+        [y,x] = np.nonzero(thresh)[:2];
+        filter=(np.abs(y-np.mean(y))<2.5*np.std(y)) & (np.abs(x-np.mean(x))<2.5*np.std(x))
+        # Find average
+        xmean = xstart+x1+np.nanmean(x[filter]);
+        ymean = ystart+y1+np.nanmean(y[filter]);
+        if xmean>200 and ymean>100:
+            ref[doy]=[ymean,xmean]
+            print('\''+doy+'\': [',int(ymean+0.5),int(xmean+0.5),'], ')
+        if cnt % 15==0:
+            fig,ax=plt.subplots(1,3,sharex=True,sharey=True); 
+            ax[0].imshow(img);    ax[1].imshow(img_m);   ax[2].imshow(thresh);         
     
-#     img_m=st.rolling_mean2(img,11)
-#     thresh=img_m>200
-    
-    img_m=st.rolling_mean2(img,71,ignore=0)
-    img_m=img-img_m; img_m-=np.nanmean(img_m)
-    std=np.nanstd(img_m)
-    thresh=img_m>4*std
-    
-#     t=time.time()
-    s = ndimage.generate_binary_structure(2,2) # iterate structure
-    labeled_mask, cc_num = ndimage.label(thresh,s)
-    try:
-        thresh = (labeled_mask == (np.bincount(labeled_mask.flat)[1:].argmax() + 1))
-    except:
-        continue
-    if  np.sum(thresh)<=9:
-        print('Moon not found.')
-        continue
-    
-    # Find coordinates of thresholded image
-    [y,x] = np.nonzero(thresh)[:2];
-    filter=(np.abs(y-np.mean(y))<2.5*np.std(y)) & (np.abs(x-np.mean(x))<2.5*np.std(x))
-    # Find average
-    xmean = xstart+x1+np.nanmean(x[filter]);
-    ymean = ystart+y1+np.nanmean(y[filter]);
-    if xmean>200 and ymean>100:
-        ref[doy]=[ymean,xmean]
-        print('\''+doy+'\': [',int(ymean+0.5),int(xmean+0.5),'], ')
-    if cnt % 15==0:
-        fig,ax=plt.subplots(1,3,sharex=True,sharey=True); 
-        ax[0].imshow(img);    ax[1].imshow(img_m);   ax[2].imshow(thresh);         
-
-np.save(outpath + '/' + cameraID + 'calibration_data',ref)    
+    np.save(outpath + '/' + cameraID + 'calibration_data',ref)    
     
